@@ -78,19 +78,21 @@ function visInit(vis::UTMVisualizer, sc::Scenario)
     artists = PyObject[]
     
 
-    planned_path = ax1[:plot]([sc.uav_start_loc[1], map(x -> x[1], sc.uav_waypoints), sc.uav_end_loc[1]], [sc.uav_start_loc[2], map(x -> x[2], sc.uav_waypoints), sc.uav_end_loc[2]], ".--", color = "0.7")
-    append!(artists, planned_path)
-
-
-    uav_start_loc = ax1[:plot](sc.uav_start_loc[1], sc.uav_start_loc[2], "k.")
-    append!(artists, uav_start_loc)
-
-
-    if sc.uav_localization == :radiolocation
+    if sc.cell_towers != nothing
         for (x, y) in sc.cell_towers
             cell_tower = ax1[:plot](x, y, "k^", markerfacecolor = "white")
             append!(artists, cell_tower)
         end
+    end
+
+
+    for uav in sc.UAVs
+        planned_path = ax1[:plot]([uav.start_loc[1], map(x -> x[1], uav.waypoints), uav.end_loc[1]], [uav.start_loc[2], map(x -> x[2], uav.waypoints), uav.end_loc[2]], ".--", color = "0.7")
+        append!(artists, planned_path)
+
+
+        uav_start_loc = ax1[:plot](uav.start_loc[1], uav.start_loc[2], "k.")
+        append!(artists, uav_start_loc)
     end
 
 
@@ -112,8 +114,10 @@ function visUpdate(vis::UTMVisualizer, sc::Scenario)
     push!(vis.artists, text)
 
 
-    uav_marker = ax1[:plot](sc.uav_start_loc[1], sc.uav_start_loc[2], "mo", markersize = 5. / min(sc.x, sc.y) * 5280)
-    append!(vis.artists, uav_marker)
+    for uav in sc.UAVs
+        uav_marker = ax1[:plot](uav.start_loc[1], uav.start_loc[2], "mo", markersize = 5. / min(sc.x, sc.y) * 5280)
+        append!(vis.artists, uav_marker)
+    end
 
 
     fig[:canvas][:draw]()
@@ -132,12 +136,21 @@ function visUpdate(vis::UTMVisualizer, sc::Scenario, state::ScenarioState, times
     push!(vis.artists, text)
 
 
-    uav_path = ax1[:plot]([map(x -> x[1], state.uav_past_locs), state.uav_loc[1]], [map(x -> x[2], state.uav_past_locs), state.uav_loc[2]], "r")
-    append!(vis.artists, uav_path)
+    for uav_state in state.UAVStates
+        if uav_state.status == :flying
+            path_alpha = 1.
+            marker_style = "mo"
+        else
+            path_alpha = 0.2
+            marker_style = "go"
+        end
 
+        uav_path = ax1[:plot]([map(x -> x[1], uav_state.past_locs), uav_state.curr_loc[1]], [map(x -> x[2], uav_state.past_locs), uav_state.curr_loc[2]], "r", alpha = path_alpha)
+        append!(vis.artists, uav_path)
 
-    uav_marker = ax1[:plot](state.uav_loc[1], state.uav_loc[2], "mo", markersize = 5. / min(sc.x, sc.y) * 5280)
-    append!(vis.artists, uav_marker)
+        uav_marker = ax1[:plot](uav_state.curr_loc[1], uav_state.curr_loc[2], marker_style, markersize = 5. / min(sc.x, sc.y) * 5280)
+        append!(vis.artists, uav_marker)
+    end
 
 
     fig[:canvas][:draw]()

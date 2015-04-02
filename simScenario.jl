@@ -1,44 +1,46 @@
 # Author: Youngjun Kim, youngjun@stanford.edu
 # Date: 03/09/2015
 
+using UAV_
+using UAVList_
 using Scenario_
 using UTMVisualizer_
 
 
-function generateParams()
+function generateScenario()
 
     params = ScenarioParams()
 
     params.x = 5000.    # ft
     params.y = 5000.    # ft
 
-    params.dt = 1       # seconds
+    params.dt = 1.      # seconds
 
-    params.uav_start_loc = nothing  # [x: ft, y: ft]
-    params.uav_end_loc = nothing    # [x: ft, y: ft]
-    params.uav_waypoints = nothing  # list of [x: ft, y: ft]
-    params.uav_velocity = 0.        # ft/s
+    params.cell_towers = Vector{Float64}[[160., 200.], [2100., 4900.], [4800., 500.]]
 
-    # GPS_INS, deadreckoning or radiolocation
-    params.uav_localization = :GPS_INS
+    params.sa_dist = 500 # ft
 
-    # deadreckoning
-    params.uav_IMU_acc_instability = nothing
-    params.uav_IMU_acc_VRW = nothing
-    params.uav_IMU_gyr_instability = nothing
-    params.uav_IMU_gyr_ARW = nothing
+    params.UAVs = UAV[]
+    params.nUAV = length(UAVList)
 
-    # radiolocation
-    params.cell_towers = nothing
-    params.uav_rl_error_bound = 0.
+    for i = 1:params.nUAV
+        uav = UAVList[i]
 
-    return params
+        uav.x = params.x
+        uav.y = params.y
+        uav.dt = params.dt
+
+        push!(params.UAVs, uav)
+    end
+
+    sc = Scenario(params)
+
+    return sc
 end
 
 
-function simulate(params::ScenarioParams; draw::Bool = false, wait::Bool = false)
+function simulate(sc::Scenario; draw::Bool = false, wait::Bool = false)
 
-    sc = Scenario(params)
     state = ScenarioState(sc)
 
     if draw
@@ -51,8 +53,6 @@ function simulate(params::ScenarioParams; draw::Bool = false, wait::Bool = false
 
     t = 0
 
-    #println("t: ", t, ", uav_loc: ", state.uav_loc)
-
     if draw
         visInit(vis, sc)
         visUpdate(vis, sc, state, t)
@@ -64,14 +64,14 @@ function simulate(params::ScenarioParams; draw::Bool = false, wait::Bool = false
 
         updateState(sc, state)
 
-        #println("t: ", t, ", uav_loc: ", state.uav_loc)
-
         if draw
             visInit(vis, sc)
             visUpdate(vis, sc, state, t)
             updateAnimation(vis)
         end
     end
+
+    println("# of SA violations: ", state.sa_violation_count)
 
     if draw
         saveAnimation(vis, repeat = true)
@@ -81,23 +81,8 @@ end
 
 srand(uint(time()))
 
-params = generateParams()
+sc = generateScenario()
 
-params.uav_start_loc = [100., 2500.]
-params.uav_end_loc = [4500., 3000.]
-params.uav_waypoints = Vector{Float64}[[2000., 1000.], [4000., 3500.]]
-params.uav_velocity = 40.
-
-#params.uav_localization = :deadreckoning
-#params.uav_IMU_acc_instability = 6.e-6
-#params.uav_IMU_acc_VRW = 0.06
-#params.uav_IMU_gyr_instability = 4.e-5
-#params.uav_IMU_gyr_ARW = 0.75
-
-params.uav_localization = :radiolocation
-params.cell_towers = Vector{Float64}[[160., 200.], [2100., 4900.], [4800., 500.]]
-params.uav_rl_error_bound = 300.
-
-simulate(params, draw = true, wait = false)
+simulate(sc, draw = true, wait = false)
 
 
