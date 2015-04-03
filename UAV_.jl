@@ -36,6 +36,7 @@ type UAV
     x::Float64
     y::Float64
     dt::Float64
+    cell_towers::Union(Vector{Vector{Float64}}, Nothing)
 
 
     function UAV()
@@ -76,6 +77,7 @@ type UAV
         self.x = 0.
         self.y = 0.
         self.dt = 0.
+        self.cell_towers = nothing
 
         return self
     end
@@ -134,7 +136,7 @@ type UAVState
         self.IMU_acc_bias = [0., 0.]
         self.IMU_gyr_bias = [0.]
 
-        self.cell_towers = nothing
+        self.cell_towers = uav.cell_towers
         self.loc_estimated = uav.start_loc
         self.P = zeros(2, 2)
 
@@ -324,7 +326,7 @@ function updateStateRL(uav::UAV, state::UAVState; bKalmanFilter::Bool = false)
 
         F = eye(2)
         B = uav.velocity * uav.dt
-        Q = [0 0; 0 0]
+        Q = [100^2 0; 0 100^2]
 
         H = eye(2)
         R = [500^2 0; 0 500^2]

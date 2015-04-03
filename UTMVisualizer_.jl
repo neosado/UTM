@@ -150,6 +150,11 @@ function visUpdate(vis::UTMVisualizer, sc::Scenario, state::ScenarioState, times
 
         uav_marker = ax1[:plot](uav_state.curr_loc[1], uav_state.curr_loc[2], marker_style, markersize = 5. / min(sc.x, sc.y) * 5280)
         append!(vis.artists, uav_marker)
+
+        if uav_state.status == :flying
+            uav_sa = ax1[:add_patch](plt.Circle((uav_state.curr_loc[1], uav_state.curr_loc[2]), radius = sc.sa_dist / 2, edgecolor = "0.5", facecolor = "none", linestyle = "dotted"))
+            push!(vis.artists, uav_sa)
+        end
     end
 
 

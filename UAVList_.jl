@@ -62,8 +62,56 @@ function UAV2()
 end
 
 
+function UAV3()
+
+    uav = UAV()
+
+    uav.start_loc = [400., 4900.]
+    uav.end_loc = [3700., 200.]
+
+    uav.waypoints = Vector{Float64}[[2700., 3000.]]
+
+    UAV_common(uav)
+
+    return uav
+end
+
+
+function UAV4()
+
+    uav = UAV()
+
+    uav.start_loc = [2000., 4900.]
+    uav.end_loc = [2500., 100.]
+
+    uav.waypoints = Vector{Float64}[[1600., 3800.], [2700., 1900.]]
+
+    UAV_common(uav)
+
+    return uav
+end
+
+
+function UAV5()
+
+    uav = UAV()
+
+    uav.start_loc = [4900., 2000.]
+    uav.end_loc = [100., 4000.]
+
+    uav.waypoints = Vector{Float64}[[2000., 3000.]]
+
+    UAV_common(uav)
+
+    return uav
+end
+
+
 push!(UAVList, UAV1())
 push!(UAVList, UAV2())
+push!(UAVList, UAV3())
+push!(UAVList, UAV4())
+push!(UAVList, UAV5())
 
 
 end

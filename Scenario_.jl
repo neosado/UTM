@@ -103,8 +103,6 @@ type ScenarioState
 
     UAVStates::Vector{UAVState}
 
-    sa_violation_count::Int64
-
 
     function ScenarioState(sc::Scenario)
 
@@ -115,8 +113,6 @@ type ScenarioState
             push!(self.UAVStates, UAVState(uav))
         end
 
-        self.sa_violation_count = 0
-
         return self
     end
 end
@@ -126,19 +122,6 @@ function updateState(sc::Scenario, state::ScenarioState)
 
     for i = 1:sc.nUAV
         UAV_.updateState(sc.UAVs[i], state.UAVStates[i])
-    end
-
-    for i = 1:sc.nUAV-1
-        for j = i+1:sc.nUAV
-            state1 = state.UAVStates[i]
-            state2 = state.UAVStates[j]
-
-            if state1.status == :flying && state2.status == :flying
-                if norm(state1.curr_loc - state2.curr_loc) < sc.sa_dist
-                    state.sa_violation_count += 1
-                end
-            end
-        end
     end
 end
 

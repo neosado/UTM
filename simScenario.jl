@@ -29,6 +29,7 @@ function generateScenario()
         uav.x = params.x
         uav.y = params.y
         uav.dt = params.dt
+        uav.cell_towers = params.cell_towers
 
         push!(params.UAVs, uav)
     end
@@ -59,10 +60,33 @@ function simulate(sc::Scenario; draw::Bool = false, wait::Bool = false)
         updateAnimation(vis)
     end
 
+    sa_violation = zeros(Bool, sc.nUAV, sc.nUAV)
+    sa_violation_count = 0
+
     while !isEndState(sc, state)
         t += 1
 
         updateState(sc, state)
+
+        for i = 1:sc.nUAV-1
+            for j = i+1:sc.nUAV
+                state1 = state.UAVStates[i]
+                state2 = state.UAVStates[j]
+
+                if state1.status == :flying && state2.status == :flying
+                    if norm(state1.curr_loc - state2.curr_loc) < sc.sa_dist
+                        if !sa_violation[i, j]
+                            sa_violation[i, j] = true
+                            sa_violation_count += 1
+                        end
+                    else
+                        if sa_violation[i, j]
+                            sa_violation[i, j] = false
+                        end
+                    end
+                end
+            end
+        end
 
         if draw
             visInit(vis, sc)
@@ -71,7 +95,7 @@ function simulate(sc::Scenario; draw::Bool = false, wait::Bool = false)
         end
     end
 
-    println("# of SA violations: ", state.sa_violation_count)
+    println("# of SA violations: ", sa_violation_count)
 
     if draw
         saveAnimation(vis, repeat = true)
