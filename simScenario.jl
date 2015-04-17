@@ -7,7 +7,7 @@ using Scenario_
 using UTMVisualizer_
 
 
-function generateScenario()
+function generateScenario(; localization::Symbol = :GPS_INS, bCAS::Bool = false)
 
     params = ScenarioParams()
 
@@ -20,11 +20,15 @@ function generateScenario()
 
     params.sa_dist = 500 # ft
 
+    params.bCAS = bCAS
+
     params.UAVs = UAV[]
     params.nUAV = length(UAVList)
 
     for i = 1:params.nUAV
         uav = UAVList[i]
+
+        uav.localization = localization
 
         uav.x = params.x
         uav.y = params.y
@@ -66,7 +70,7 @@ function simulate(sc::Scenario; draw::Bool = false, wait::Bool = false)
     while !isEndState(sc, state)
         t += 1
 
-        updateState(sc, state)
+        updateState(sc, state, t)
 
         for i = 1:sc.nUAV-1
             for j = i+1:sc.nUAV
@@ -95,18 +99,42 @@ function simulate(sc::Scenario; draw::Bool = false, wait::Bool = false)
         end
     end
 
-    println("# of SA violations: ", sa_violation_count)
+    #println("# of SA violations: ", sa_violation_count)
 
     if draw
         saveAnimation(vis, repeat = true)
     end
+
+    return sa_violation_count
 end
 
 
-srand(uint(time()))
+if false
+    srand(uint(time()))
 
-sc = generateScenario()
+    sc = generateScenario(localization = :radiolocation, bCAS = true)
 
-simulate(sc, draw = true, wait = false)
+    simulate(sc, draw = true, wait = false)
+end
+
+
+if false
+    srand(uint(time()))
+
+    sc = generateScenario(localization = :radiolocation, bCAS = true)
+
+    N = 1000
+
+    va = zeros(N)
+    y = 0.
+
+    for i = 1:N
+        x = simulate(sc)
+        y += (x - y) / i
+        va[i] = y
+    end
+
+    println("mean: ", va[end], ", std: ", std(va))
+end
 
 

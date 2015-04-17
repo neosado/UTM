@@ -37,7 +37,7 @@ function UAV1()
     uav = UAV()
 
     uav.start_loc = [100., 2500.]
-    uav.end_loc = [4900., 3000.]
+    uav.end_loc = [5500., 3000.]
 
     uav.waypoints = Vector{Float64}[[2000., 2000.], [3600., 3000.]]
 
@@ -52,7 +52,7 @@ function UAV2()
     uav = UAV()
 
     uav.start_loc = [4000., 4900.]
-    uav.end_loc = [1500., 100.]
+    uav.end_loc = [1500., -500.]
 
     uav.waypoints = Vector{Float64}[[2000., 3000.]]
 
@@ -67,7 +67,7 @@ function UAV3()
     uav = UAV()
 
     uav.start_loc = [400., 4900.]
-    uav.end_loc = [4900., 4000.]
+    uav.end_loc = [5500., 4000.]
 
     uav.waypoints = Vector{Float64}[[2700., 4200.]]
 
@@ -82,7 +82,7 @@ function UAV4()
     uav = UAV()
 
     uav.start_loc = [3200., 100.]
-    uav.end_loc = [4400., 4900.]
+    uav.end_loc = [4400., 5500.]
 
     uav.waypoints = Vector{Float64}[[4400., 1800.], [3800., 3900.]]
 
@@ -97,7 +97,7 @@ function UAV5()
     uav = UAV()
 
     uav.start_loc = [4900., 2200.]
-    uav.end_loc = [100., 900.]
+    uav.end_loc = [-500., 900.]
 
     uav.waypoints = Vector{Float64}[[1600., 1200.]]
 

@@ -14,6 +14,7 @@ type UAV
 
     start_loc::Union(Vector{Float64}, Nothing)
     end_loc::Union(Vector{Float64}, Nothing)
+    cas_loc::Union(Vector{Float64}, Nothing)
 
     waypoints::Union(Vector{Vector{Float64}}, Nothing)
     nwaypoints::Int64
@@ -45,6 +46,7 @@ type UAV
 
         self.start_loc = nothing    # [x:ft, y:ft]
         self.end_loc = nothing      # [x:ft, y:ft]
+        self.cas_loc = nothing      # [x:ft, y:ft]
 
         self.waypoints = nothing    # list of [x:ft, y:ft]
         self.nwaypoints = 0
@@ -116,18 +118,22 @@ type UAVState
 
         self.status = :flying
 
-        if uav.nwaypoints > 0
-            phi = atan2(uav.waypoints[1][2] - uav.start_loc[2], uav.waypoints[1][1] - uav.start_loc[1]) * 180/pi
+        if uav.cas_loc != nothing
+            self.waypoint = uav.cas_loc
         else
-            phi = atan2(uav.end_loc[2] - uav.start_loc[2], uav.end_loc[1] - uav.start_loc[1]) * 180/pi
-        end
-        self.velocity = [uav.velocity * cosd(phi), uav.velocity * sind(phi)]
+            if uav.nwaypoints > 0
+                phi = atan2(uav.waypoints[1][2] - uav.start_loc[2], uav.waypoints[1][1] - uav.start_loc[1]) * 180/pi
+            else
+                phi = atan2(uav.end_loc[2] - uav.start_loc[2], uav.end_loc[1] - uav.start_loc[1]) * 180/pi
+            end
+            self.velocity = [uav.velocity * cosd(phi), uav.velocity * sind(phi)]
 
-        if uav.nwaypoints > 0
-            self.waypoint_index = 1
-            self.waypoint = uav.waypoints[self.waypoint_index]
-        else
-            self.waypoint = uav.end_loc
+            if uav.nwaypoints > 0
+                self.waypoint_index = 1
+                self.waypoint = uav.waypoints[self.waypoint_index]
+            else
+                self.waypoint = uav.end_loc
+            end
         end
 
         self.past_locs = (Float64, Float64)[]
@@ -254,7 +260,7 @@ end
 
 function RSSLossWithError(uav::UAV, d::Float64)
 
-    sigma_err = 4 # dB, 4-12dB (desert to dense urban)
+    sigma_err = 2 # dB, 4-12dB (desert to dense urban)
 
     return RSSLoss(uav, d) + rand(Normal(0., sigma_err))
 end
@@ -358,21 +364,25 @@ function updateStateRL(uav::UAV, state::UAVState; bKalmanFilter::Bool = false)
     #        state.curr_loc += (state.waypoint - prev_waypoint) / norm(state.waypoint - prev_waypoint) * delta_remained
     #    end
 
-    if norm(state.loc_estimated - state.waypoint) <= uav.rl_error_bound
-        if state.waypoint != uav.end_loc
-            if state.waypoint_index != uav.nwaypoints
-                state.waypoint_index += 1
-                state.waypoint = uav.waypoints[state.waypoint_index]
-            else
-                state.waypoint = uav.end_loc
+    if uav.cas_loc != nothing
+        state.curr_loc += delta
+    else
+        if norm(state.loc_estimated - state.waypoint) <= uav.rl_error_bound
+            if state.waypoint != uav.end_loc
+                if state.waypoint_index != uav.nwaypoints
+                    state.waypoint_index += 1
+                    state.waypoint = uav.waypoints[state.waypoint_index]
+                else
+                    state.waypoint = uav.end_loc
+                end
+
+                state.curr_loc += (state.waypoint - state.loc_estimated) / norm(state.waypoint - state.loc_estimated) * uav.velocity * uav.dt
             end
 
-            state.curr_loc += (state.waypoint - state.loc_estimated) / norm(state.waypoint - state.loc_estimated) * uav.velocity * uav.dt
+        else
+            state.curr_loc += delta
+
         end
-
-    else
-        state.curr_loc += delta
-
     end
 
     EstimateLocationWithTowers(uav, state)
@@ -405,12 +415,30 @@ function updateState(uav::UAV, state::UAVState)
         if uav.localization == :GPS_INS
             updateStateGPSINS(uav, state)
 
+            if state.curr_loc == uav.end_loc
+                state.status = :done
+            end
+
         elseif uav.localization == :deadreckoning
             updateStateDR(uav, state)
+
+            if state.loc_planned == uav.end_loc
+                state.status = :done
+            end
 
         elseif uav.localization == :radiolocation
             updateStateRL(uav, state, bKalmanFilter = true)
 
+            if norm(state.curr_loc - uav.end_loc) <= uav.rl_error_bound
+                state.status = :done
+            end
+
+        end
+
+        (x, y) = state.curr_loc
+
+        if x < 0 || x > uav.x || y < 0 || y > uav.y
+            state.status = :done
         end
     end
 end
@@ -418,36 +446,10 @@ end
 
 function isEndState(uav::UAV, state::UAVState)
 
-    if state.status == :flying
-        if uav.localization == :GPS_INS
-            if state.curr_loc == uav.end_loc
-                state.status = :done
-                return true
-            end
-        elseif uav.localization == :deadreckoning
-            if state.loc_planned == uav.end_loc
-                state.status = :done
-                return true
-            end
-        elseif uav.localization == :radiolocation
-            if norm(state.curr_loc - uav.end_loc) <= uav.rl_error_bound
-                state.status = :done
-                return true
-            end
-        end
-
-        (x, y) = state.curr_loc
-
-        if x < 0 || x > uav.x || y < 0 || y > uav.y
-            state.status = :done
-            return true
-        end
-
-        return false
-
-    else
+    if state.status == :done
         return true
-
+    else
+        return false
     end
 end
 

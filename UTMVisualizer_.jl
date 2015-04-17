@@ -91,6 +91,12 @@ function visInit(vis::UTMVisualizer, sc::Scenario)
         append!(artists, planned_path)
 
 
+        if uav.cas_loc != nothing
+            cas_path = ax1[:plot]([uav.start_loc[1], uav.cas_loc[1]], [uav.start_loc[2], uav.cas_loc[2]], "c--", alpha = 0.2)
+            append!(artists, cas_path)
+        end
+
+
         uav_start_loc = ax1[:plot](uav.start_loc[1], uav.start_loc[2], "k.")
         append!(artists, uav_start_loc)
     end
@@ -148,10 +154,10 @@ function visUpdate(vis::UTMVisualizer, sc::Scenario, state::ScenarioState, times
         uav_path = ax1[:plot]([map(x -> x[1], uav_state.past_locs), uav_state.curr_loc[1]], [map(x -> x[2], uav_state.past_locs), uav_state.curr_loc[2]], "r", alpha = path_alpha)
         append!(vis.artists, uav_path)
 
-        uav_marker = ax1[:plot](uav_state.curr_loc[1], uav_state.curr_loc[2], marker_style, markersize = 5. / min(sc.x, sc.y) * 5280)
-        append!(vis.artists, uav_marker)
-
         if uav_state.status == :flying
+            uav_marker = ax1[:plot](uav_state.curr_loc[1], uav_state.curr_loc[2], marker_style, markersize = 5. / min(sc.x, sc.y) * 5280)
+            append!(vis.artists, uav_marker)
+
             uav_sa = ax1[:add_patch](plt.Circle((uav_state.curr_loc[1], uav_state.curr_loc[2]), radius = sc.sa_dist / 2, edgecolor = "0.5", facecolor = "none", linestyle = "dotted"))
             push!(vis.artists, uav_sa)
         end
