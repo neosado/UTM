@@ -176,8 +176,7 @@ function updateState(sc::Scenario, state::ScenarioState, t::Int64)
                 uav_state = state.UAVStates[indexes[i]]
 
                 p1 = uav_state.curr_loc
-                index, q1 = uav_state.advisory
-                v1 = uav.velocity
+                index, q1, v1 = uav_state.advisory
 
                 while norm(q1 - sc.jamming_center) > sc.jamming_radius
                     q1 -= (q1 - p1) / norm(q1 - p1) * v1
@@ -185,9 +184,9 @@ function updateState(sc::Scenario, state::ScenarioState, t::Int64)
                 q1 += (q1 - p1) / norm(q1 - p1) * v1 * 10
 
                 if index != nothing
-                    uav_state.advisory = (index - 1, q1)
+                    uav_state.advisory = (index - 1, q1, v1)
                 else
-                    uav_state.advisory = (index, q1)
+                    uav_state.advisory = (index, q1, v1)
                 end
             end
         end
@@ -256,6 +255,16 @@ function resolve_conflict(sc::Scenario, state::ScenarioState, indexes::Vector{In
     shuffle!(indexes)
     nindex = length(indexes)
 
+    dphi_list = Float64[]
+    ndphilist = 72
+    push!(dphi_list, 0.)
+    dphi = 360 / ndphilist
+    for j = 1:((ndphilist / 2) - 1)
+        push!(dphi_list, dphi * j)
+        push!(dphi_list, - dphi * j)
+    end
+    push!(dphi_list, 180.)
+
     for i in 1:nindex
         uav = sc.UAVs[indexes[i]]
         uav_state = state.UAVStates[indexes[i]]
@@ -264,12 +273,27 @@ function resolve_conflict(sc::Scenario, state::ScenarioState, indexes::Vector{In
         index, q1 = getWaypointOutOfGPSLoss(sc, uav, uav_state)
         v1 = uav.velocity
 
+        #println("uav ", uav.number, ", velocity: ", v1, ", dphi: 0.")
+
         uav_state.bAdvisory = true
-        uav_state.advisory = (index, q1)
+        uav_state.advisory = (index, q1, v1)
         uav_state.loss_loc = uav_state.curr_loc
 
+        v_list = Float64[]
+        nvlist = 9
+        push!(v_list, v1)
+        dv = (uav.velocity_max - uav.velocity_min) / (nvlist - 1)
+        for j = 1:((nvlist - 1) / 2)
+            push!(v_list, v1 + dv * j)
+            push!(v_list, v1 - dv * j)
+        end
+
         if i > 1
-            phi = 0
+            q1_ = q1
+
+            v_index = 1
+            dphi_index = 1
+            dphi = 0.
 
             while true
                 bSafe = true
@@ -279,24 +303,32 @@ function resolve_conflict(sc::Scenario, state::ScenarioState, indexes::Vector{In
                     uav_state_ = state.UAVStates[indexes[j]]
 
                     p2 = uav_state_.curr_loc
-                    q2 = getWaypointOutOfGPSLoss(sc, uav_, uav_state_)[2]
-                    v2 = uav_.velocity
+                    (index2, q2, v2) = uav_state_.advisory
 
-                    if !is_safe(p1, q1, v1, p2, q2, v2, sc.sa_dist * 2)
+                    if !is_safe(p1, q1_, v1, p2, q2, v2, sc.sa_dist * 2)
                         bSafe = false
                         break
                     end
                 end
 
                 if bSafe
-                    if phi != 0
-                        #println("rotate route ", indexes[i], " by ", phi, " degrees")
-                    end
-                    uav_state.advisory = (index, q1)
+                    #println("uav ", uav.number, ", velocity: ", v1, ", dphi: ", dphi)
+                    uav_state.advisory = (index, q1_, v1)
                     break
                 else
-                    phi += 5
-                    q1 = [cosd(phi) -sind(phi); sind(phi) cosd(phi)] * (q1 - p1) + p1
+                    v_index += 1
+
+                    if v_index <= nvlist
+                        v1 = v_list[v_index]
+                    else
+                        v_index = 1
+                        v1 = v_list[v_index]
+
+                        dphi_index += 1
+                        dphi = dphi_list[dphi_index]
+                    end
+
+                    q1_ = [cosd(dphi) -sind(dphi); sind(dphi) cosd(dphi)] * (q1 - p1) + p1
 
                     #dt = 0
                     #while q1[1] >= 0. && q1[1] <= sc.x && q1[2] >= 0. && q1[2] <= sc.y
@@ -305,14 +337,14 @@ function resolve_conflict(sc::Scenario, state::ScenarioState, indexes::Vector{In
                     #end
                     #q1 += (q1 - p1) / norm(q1 - p1) * v1 * 5
 
-                    if norm(q1 - sc.jamming_center) <= sc.jamming_radius
-                        if index != nothing
-                            if index + 1 <= uav.nwaypoints
-                                index += 1
-                                q1 = uav.waypoints[index]
-                            end
-                        end
-                    end
+                    #if norm(q1 - sc.jamming_center) <= sc.jamming_radius
+                    #    if index != nothing
+                    #        if index + 1 <= uav.nwaypoints
+                    #            index += 1
+                    #            q1 = uav.waypoints[index]
+                    #        end
+                    #    end
+                    #end
                 end
             end
         end

@@ -18,6 +18,8 @@ function generateParameters(model::ASCIIString)
 
         params.cell_towers = Vector{Float64}[[160., 200.], [2100., 4900.], [4800., 500.]]
 
+        params.sa_dist = 500. # ft
+
     elseif model == "m1.0"
         params.x = 5000.    # ft
         params.y = 5000.    # ft
@@ -66,8 +68,6 @@ function generateParameters(model::ASCIIString)
 
         params.sa_dist = 500. # ft
 
-        params.bCAS = true
-
     elseif model == "m3.0"
         params.x = 20000.    # ft
         params.y = 20000.    # ft
@@ -75,6 +75,8 @@ function generateParameters(model::ASCIIString)
         params.dt = 1.      # seconds
 
         params.cell_towers = Vector{Float64}[[7660., 7700.], [9600., 12400.], [12300., 8000.]]
+
+        params.landing_bases = Vector{Float64}[[4000., 7000.], [16000., 4000.], [13000., 16000.]]
 
         params.jamming_time = 0.
         params.jamming_center = [params.x / 2, params.y / 2]
@@ -112,6 +114,8 @@ function generateUAVList(UAVs)
         uav.end_loc = uav_info[end]
 
         uav.velocity = 40.
+        uav.velocity_min = 20.
+        uav.velocity_max = 60.
 
         # nav or base
         uav.GPS_loss_policy = :nav
@@ -244,7 +248,7 @@ function simulate(sc::Scenario; draw::Bool = false, wait::Bool = false)
                 state1 = state.UAVStates[i]
                 state2 = state.UAVStates[j]
 
-                if state1.status == :flying && state2.status == :flying
+                if (state1.status == :flying || state1.status == :base) && (state2.status == :flying || state2.status == :base)
                     if norm(state1.curr_loc - state2.curr_loc) < sc.sa_dist
                         if !sa_violation[i, j]
                             sa_violation[i, j] = true
@@ -278,10 +282,15 @@ function simulate(sc::Scenario; draw::Bool = false, wait::Bool = false)
 end
 
 
-if true
+if false
     srand(uint(time()))
 
-    sc = generateScenario("m2.0", localization = :radiolocation, bCAS = false, GPS_loss_policy = :base)
+    #sc = generateScenario("m0.1", localization = :radiolocation)
+    #sc = generateScenario("m1.0", localization = :radiolocation)
+    #sc = generateScenario("m1.1", localization = :radiolocation)
+    #sc = generateScenario("m2.0", localization = :radiolocation, GPS_loss_policy = :base)
+    #sc = generateScenario("m3.0", localization = :radiolocation)
+    sc = generateScenario("m3.0", localization = :radiolocation, bCAS = false, GPS_loss_policy = :base)
 
     simulate(sc, draw = true, wait = false)
 end

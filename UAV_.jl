@@ -56,6 +56,8 @@ type UAV
     nwaypoints::Int64
 
     velocity::Float64
+    velocity_min::Float64
+    velocity_max::Float64
 
     GPS_loss_policy::Symbol
     localization::Symbol
@@ -86,6 +88,8 @@ type UAV
         self.nwaypoints = 0
 
         self.velocity = 0.          # ft/s
+        self.velocity_min = 0.
+        self.velocity_max = 0.
 
         self.GPS_loss_policy = :nav
         self.localization = :GPS_INS
@@ -118,7 +122,7 @@ type UAVState
     velocity::Vector{Float64}
 
     bAdvisory::Bool
-    advisory::Union((Union(Int64, Nothing), Vector{Float64}), Nothing)
+    advisory::Union((Union(Int64, Nothing), Vector{Float64}, Float64), Nothing)
     loss_loc::Union(Vector{Float64}, Nothing)
 
     base_loc::Union(Vector{Float64}, Nothing)
@@ -461,6 +465,7 @@ function updateState(uav::UAV, state::UAVState, t::Int64)
                 state.waypoint_index = uav.nwaypoints
             end
             state.waypoint = state.advisory[2]
+            uav.velocity = state.advisory[3]
 
             phi = atan2(state.waypoint[2] - state.curr_loc[2], state.waypoint[1] - state.curr_loc[1]) * 180/pi
             state.velocity = [uav.velocity * cosd(phi), uav.velocity * sind(phi)]

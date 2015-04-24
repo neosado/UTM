@@ -206,6 +206,11 @@ end
 
 function saveAnimation(vis::UTMVisualizer; interval::Int64 = 1000, repeat::Bool = false, filename::ASCIIString = "sim.mp4")
 
+    if repeat || vis.wait
+        readline()
+        println("save animation")
+    end
+
     im_ani = ani.ArtistAnimation(vis.fig, vis.ims, interval = interval, repeat = repeat, repeat_delay = interval * 5)
     im_ani[:save](filename)
 
