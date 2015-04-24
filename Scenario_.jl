@@ -22,12 +22,18 @@ type ScenarioParams
 
     cell_towers::Union(Vector{Vector{Float64}}, Nothing)
 
-    sa_dist::Float64
+    landing_bases::Union(Vector{Vector{Float64}}, Nothing)
 
-    bCAS::Bool
+    jamming_time::Float64
+    jamming_center::Vector{Float64}
+    jamming_radius::Float64
 
     UAVs::Union(Vector{UAV}, Nothing)
     nUAV::Int64
+
+    sa_dist::Float64
+
+    bCAS::Bool
 
 
     function ScenarioParams()
@@ -43,12 +49,18 @@ type ScenarioParams
 
         self.cell_towers = nothing
 
-        self.sa_dist = 0. # ft
+        self.landing_bases = nothing
 
-        self.bCAS = false
+        self.jamming_time = Inf
+        self.jamming_center = [0., 0.]
+        self.jamming_radius = 0.
 
         self.UAVs = nothing
         self.nUAV = 0
+
+        self.sa_dist = 0. # ft
+
+        self.bCAS = false
 
         return self
     end
@@ -65,6 +77,12 @@ type Scenario
     dt::Float64
 
     cell_towers::Union(Vector{Vector{Float64}}, Nothing)
+
+    landing_bases::Union(Vector{Vector{Float64}}, Nothing)
+
+    jamming_time::Float64
+    jamming_center::Vector{Float64}
+    jamming_radius::Float64
 
     UAVs::Union(Vector{UAV}, Nothing)
     nUAV::Int64
@@ -95,16 +113,23 @@ type Scenario
 
         self.cell_towers = params.cell_towers
 
+        self.landing_bases = params.landing_bases
+
+        self.jamming_time = params.jamming_time
+        self.jamming_center = params.jamming_center
+        self.jamming_radius = params.jamming_radius
+
         self.UAVs = params.UAVs
         self.nUAV = params.nUAV
+
+        for i = 1:self.nUAV
+            uav = self.UAVs[i]
+            uav.sc = self
+        end
 
         self.sa_dist = params.sa_dist
 
         self.bCAS = params.bCAS
-
-        if self.bCAS
-            resolve_conflict(self)
-        end
 
         return self
     end
@@ -132,8 +157,46 @@ end
 
 function updateState(sc::Scenario, state::ScenarioState, t::Int64)
 
-    for i = 1:sc.nUAV
-        UAV_.updateState(sc.UAVs[i], state.UAVStates[i])
+    if t == sc.jamming_time
+        if sc.bCAS
+            indexes = Int64[]
+
+            for i = 1:sc.nUAV
+                uav_state = state.UAVStates[i]
+
+                if norm(uav_state.curr_loc - sc.jamming_center) <= sc.jamming_radius
+                    push!(indexes, i)
+                end
+            end
+
+            resolve_conflict(sc, state, indexes)
+
+            for i in 1:length(indexes)
+                uav = sc.UAVs[indexes[i]]
+                uav_state = state.UAVStates[indexes[i]]
+
+                p1 = uav_state.curr_loc
+                index, q1 = uav_state.advisory
+                v1 = uav.velocity
+
+                while norm(q1 - sc.jamming_center) > sc.jamming_radius
+                    q1 -= (q1 - p1) / norm(q1 - p1) * v1
+                end
+                q1 += (q1 - p1) / norm(q1 - p1) * v1 * 10
+
+                if index != nothing
+                    uav_state.advisory = (index - 1, q1)
+                else
+                    uav_state.advisory = (index, q1)
+                end
+            end
+        end
+    end
+
+    if t > 0
+        for i = 1:sc.nUAV
+            UAV_.updateState(sc.UAVs[i], state.UAVStates[i], t)
+        end
     end
 end
 
@@ -167,18 +230,43 @@ function is_safe(p1, q1, v1, p2, q2, v2, safe_margin)
 end
 
 
-function resolve_conflict(sc::Scenario)
+function getWaypointOutOfGPSLoss(sc::Scenario, uav::UAV, uav_state::UAVState)
 
-    indexes = sortperm(rand(sc.nUAV))
+    index = nothing
+    loc = uav.end_loc
 
-    for i in 1:sc.nUAV
+    if uav.nwaypoints > 0 && uav_state.waypoint != uav.end_loc
+        for i = uav_state.waypoint_index:uav.nwaypoints+1
+            if i != uav.nwaypoints+1
+                if norm(uav.waypoints[i] - sc.jamming_center) > sc.jamming_radius
+                    index = i
+                    loc = uav.waypoints[i]
+                    break
+                end
+            end
+        end
+    end
+
+    return index, loc
+end
+
+
+function resolve_conflict(sc::Scenario, state::ScenarioState, indexes::Vector{Int64})
+
+    shuffle!(indexes)
+    nindex = length(indexes)
+
+    for i in 1:nindex
         uav = sc.UAVs[indexes[i]]
+        uav_state = state.UAVStates[indexes[i]]
 
-        p1 = uav.start_loc
-        q1 = uav.end_loc
+        p1 = uav_state.curr_loc
+        index, q1 = getWaypointOutOfGPSLoss(sc, uav, uav_state)
         v1 = uav.velocity
 
-        uav.cas_loc = q1
+        uav_state.bAdvisory = true
+        uav_state.advisory = (index, q1)
+        uav_state.loss_loc = uav_state.curr_loc
 
         if i > 1
             phi = 0
@@ -188,12 +276,13 @@ function resolve_conflict(sc::Scenario)
 
                 for j = 1:i-1
                     uav_ = sc.UAVs[indexes[j]]
+                    uav_state_ = state.UAVStates[indexes[j]]
 
-                    p2 = uav_.start_loc
-                    q2 = uav_.end_loc
+                    p2 = uav_state_.curr_loc
+                    q2 = getWaypointOutOfGPSLoss(sc, uav_, uav_state_)[2]
                     v2 = uav_.velocity
 
-                    if !is_safe(p1, q1, v1, p2, q2, v2, sc.sa_dist)
+                    if !is_safe(p1, q1, v1, p2, q2, v2, sc.sa_dist * 2)
                         bSafe = false
                         break
                     end
@@ -203,18 +292,27 @@ function resolve_conflict(sc::Scenario)
                     if phi != 0
                         #println("rotate route ", indexes[i], " by ", phi, " degrees")
                     end
-                    uav.cas_loc = q1
+                    uav_state.advisory = (index, q1)
                     break
                 else
                     phi += 5
                     q1 = [cosd(phi) -sind(phi); sind(phi) cosd(phi)] * (q1 - p1) + p1
 
-                    dt = 0
-                    while q1[1] >= 0. && q1[1] <= sc.x && q1[2] >= 0. && q1[2] <= sc.y
-                        dt += 1
-                        q1 += (q1 - p1) / norm(q1 - p1) * v1 * dt
+                    #dt = 0
+                    #while q1[1] >= 0. && q1[1] <= sc.x && q1[2] >= 0. && q1[2] <= sc.y
+                    #    dt += 1
+                    #    q1 += (q1 - p1) / norm(q1 - p1) * v1 * dt
+                    #end
+                    #q1 += (q1 - p1) / norm(q1 - p1) * v1 * 5
+
+                    if norm(q1 - sc.jamming_center) <= sc.jamming_radius
+                        if index != nothing
+                            if index + 1 <= uav.nwaypoints
+                                index += 1
+                                q1 = uav.waypoints[index]
+                            end
+                        end
                     end
-                    q1 += (q1 - p1) / norm(q1 - p1) * v1 * 5
                 end
             end
         end

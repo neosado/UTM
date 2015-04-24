@@ -86,15 +86,17 @@ function visInit(vis::UTMVisualizer, sc::Scenario)
     end
 
 
+    if sc.landing_bases != nothing
+        for (x, y) in sc.landing_bases
+            landing_base = ax1[:text](x, y, "H", horizontalalignment = "center", verticalalignment = "center")
+            push!(artists, landing_base)
+        end
+    end
+
+
     for uav in sc.UAVs
         planned_path = ax1[:plot]([uav.start_loc[1], map(x -> x[1], uav.waypoints), uav.end_loc[1]], [uav.start_loc[2], map(x -> x[2], uav.waypoints), uav.end_loc[2]], ".--", color = "0.7")
         append!(artists, planned_path)
-
-
-        if uav.cas_loc != nothing
-            cas_path = ax1[:plot]([uav.start_loc[1], uav.cas_loc[1]], [uav.start_loc[2], uav.cas_loc[2]], "c--", alpha = 0.2)
-            append!(artists, cas_path)
-        end
 
 
         uav_start_loc = ax1[:plot](uav.start_loc[1], uav.start_loc[2], "k.")
@@ -142,8 +144,16 @@ function visUpdate(vis::UTMVisualizer, sc::Scenario, state::ScenarioState, times
     push!(vis.artists, text)
 
 
+    if timestep >= sc.jamming_time
+        jamming_center_marker = ax1[:plot](sc.jamming_center[1], sc.jamming_center[2], "kx", markersize = 5. / min(sc.x, sc.y) * 5280)
+        append!(vis.artists, jamming_center_marker)
+
+        jamming_area = ax1[:add_patch](plt.Circle((sc.jamming_center[1], sc.jamming_center[2]), radius = sc.jamming_radius, edgecolor = "0.5", facecolor = "none", linestyle = "dashed"))
+        push!(vis.artists, jamming_area)
+    end
+
     for uav_state in state.UAVStates
-        if uav_state.status == :flying
+        if uav_state.status == :flying || uav_state.status == :base
             path_alpha = 1.
             marker_style = "mo"
         else
@@ -154,7 +164,12 @@ function visUpdate(vis::UTMVisualizer, sc::Scenario, state::ScenarioState, times
         uav_path = ax1[:plot]([map(x -> x[1], uav_state.past_locs), uav_state.curr_loc[1]], [map(x -> x[2], uav_state.past_locs), uav_state.curr_loc[2]], "r", alpha = path_alpha)
         append!(vis.artists, uav_path)
 
-        if uav_state.status == :flying
+        if uav_state.advisory != nothing
+            advisory_path = ax1[:plot]([uav_state.loss_loc[1], uav_state.advisory[2][1]], [uav_state.loss_loc[2], uav_state.advisory[2][2]], "c--", alpha = 0.2)
+            append!(vis.artists, advisory_path)
+        end
+
+        if uav_state.status == :flying || uav_state.status == :base
             uav_marker = ax1[:plot](uav_state.curr_loc[1], uav_state.curr_loc[2], marker_style, markersize = 5. / min(sc.x, sc.y) * 5280)
             append!(vis.artists, uav_marker)
 
